@@ -459,31 +459,9 @@ with tabs[hydro_tab_index]:
         )
     
     with hydro_col2:
-        if hydro_chart_type == "Total Capacity Comparison" and has_reservoir_data:
-            # Create region translation dictionary
-            region_translation = {
-                "Đông Bắc Bộ": "Northeast",
-                "Tây Bắc Bộ": "Northwest", 
-                "Bắc Trung Bộ": "North Central",
-                "Nam Trung Bộ": "South Central",
-                "Tây Nguyên": "Central Highlands"
-            }
-            
-            # Add English region names to reservoir data if not already done
-            if 'region_en' not in reservoir_df.columns:
-                reservoir_df['region_en'] = reservoir_df['region'].map(region_translation)
-            
-            hydro_region = st.selectbox(
-                "Select Region:",
-                sorted(reservoir_df['region_en'].dropna().unique()),
-                key="hydro_region"
-            )
-        else:
-            hydro_period = st.selectbox(
-                "Select Time Period:",
-                ["Monthly", "Quarterly", "Semi-annually", "Annually"],
-                key="hydro_period"
-            )
+        # Leave this column empty for both chart types
+        # as controls are shown in the appropriate sections below
+        pass
     
     if hydro_chart_type == "Total Capacity Comparison" and has_reservoir_data:
         st.subheader("Total Capacity Comparison (2024 vs 2025)")
