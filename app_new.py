@@ -6,6 +6,8 @@ import calendar
 from plotly.subplots import make_subplots
 import calendar
 import io
+import time
+import yfinance as yf
 from datetime import datetime
 
 # Page configuration
@@ -461,16 +463,36 @@ def load_data():
         reservoir_df = None
         has_reservoir_data = False
     
-    return df, renewable_df, thermal_df, cgm_df, reservoir_df, has_renewable_data, has_thermal_data, has_cgm_data, has_reservoir_data
+    # Load POW power data
+    pow_df = None
+    has_pow_data = False
+    try:
+        pow_df = pd.read_excel('pvpower.xlsx')
+        # Rename the first column to 'Date'
+        pow_df.rename(columns={pow_df.columns[0]: 'Date'}, inplace=True)
+        pow_df['Date'] = pd.to_datetime(pow_df['Date'])
+        pow_df['Year'] = pow_df['Date'].dt.year
+        pow_df['Month'] = pow_df['Date'].dt.month
+        pow_df['Quarter'] = pow_df['Date'].dt.quarter
+        pow_df['Half'] = (pow_df['Date'].dt.month - 1) // 6 + 1
+        has_pow_data = True
+    except FileNotFoundError:
+        st.warning("POW data file 'pvpower.xlsx' not found.")
+    except Exception as e:
+        st.warning(f"Error loading POW data: {e}")
+    
+    return df, renewable_df, thermal_df, cgm_df, reservoir_df, pow_df, has_renewable_data, has_thermal_data, has_cgm_data, has_reservoir_data, has_pow_data
 
 # Load all data
-df, renewable_df, thermal_df, cgm_df, reservoir_df, has_renewable_data, has_thermal_data, has_cgm_data, has_reservoir_data = load_data()
+df, renewable_df, thermal_df, cgm_df, reservoir_df, pow_df, has_renewable_data, has_thermal_data, has_cgm_data, has_reservoir_data, has_pow_data = load_data()
 
 # Create tabs - clean tab structure
 tab_list = ["⚡Power Volume", "💲CGM Price"]
 if has_renewable_data:
     tab_list.append("🍃Renewable Power")
 tab_list.extend(["💧Hydro Power", "🪨Coal-fired Power", "🔥Gas-fired Power"])
+if has_pow_data:
+    tab_list.append("🏭POW Power")
 
 tabs = st.tabs(tab_list)
 
@@ -1635,4 +1657,278 @@ with tabs[gas_tab_index]:
     gas_stocks = ['POW', 'NT2', 'PGV', 'BTP']
     gas_stock_fig = create_stock_performance_chart(gas_stocks, "Gas Power")
     st.plotly_chart(gas_stock_fig, use_container_width=True)
+
+
+# Tab 7: POW Power (if available)
+if has_pow_data:
+    pow_tab_index = 6 if has_renewable_data else 5
+    with tabs[pow_tab_index]:
+        st.header("POW Power Analysis")
+        
+        # Define power plants
+        power_plants = ['Ca Mau', 'Nhon Trach 1', 'Nhon Trach 2 (NT2)', 'Hua Na', 'Dak Drinh', 'Vung Ang']
+        
+        # Controls
+        pow_col1, pow_col2, pow_col3 = st.columns(3)
+        
+        with pow_col1:
+            pow_chart_type = st.selectbox(
+                "Select Chart Type:",
+                ["Power Volume", "Revenue & ASP"],
+                key="pow_chart_type"
+            )
+        
+        with pow_col2:
+            pow_period = st.selectbox(
+                "Select Time Period:",
+                ["Monthly", "Quarterly", "Semi-annually", "Annually"],
+                key="pow_period"
+            )
+        
+        if pow_chart_type == "Power Volume":
+            with pow_col3:
+                volume_type = st.selectbox(
+                    "Select Volume Type:",
+                    ["Mobilized", "Contracted"],
+                    key="pow_volume_type"
+                )
+            
+            # Plant selection
+            selected_plants = st.multiselect(
+                "Select Power Plants:",
+                power_plants,
+                default=power_plants,
+                key="pow_plants_selection"
+            )
+            
+            # Growth type selector
+            pow_growth_type = st.selectbox(
+                "Select Growth Type:",
+                ["Year-over-Year (YoY)", "Year-to-Date (YTD)"],
+                key="pow_growth_type"
+            )
+            
+            st.subheader(f"Power Volume - {volume_type}")
+            
+            # Create column mapping for selected volume type
+            volume_suffix = f" {volume_type} (mn kWh)"
+            selected_columns = [plant + volume_suffix for plant in selected_plants]
+            
+            # Filter and aggregate data based on period
+            if pow_period == "Monthly":
+                pow_filtered_df = pow_df[['Date'] + selected_columns].copy()
+            elif pow_period == "Quarterly":
+                pow_filtered_df = pow_df.groupby(['Year', 'Quarter'])[selected_columns].sum().reset_index()
+                pow_filtered_df['Date'] = pd.to_datetime([f"{y}-{q*3:02d}-01" for y, q in zip(pow_filtered_df['Year'], pow_filtered_df['Quarter'])])
+            elif pow_period == "Semi-annually":
+                pow_filtered_df = pow_df.groupby(['Year', 'Half'])[selected_columns].sum().reset_index()
+                pow_filtered_df['Date'] = pd.to_datetime([f"{y}-{h*6:02d}-01" for y, h in zip(pow_filtered_df['Year'], pow_filtered_df['Half'])])
+            else:  # Annually
+                pow_filtered_df = pow_df.groupby('Year')[selected_columns].sum().reset_index()
+                pow_filtered_df['Date'] = pd.to_datetime([f"{int(y)}-01-01" for y in pow_filtered_df['Year']])
+            
+            # Calculate total volume
+            pow_filtered_df['Total_Volume'] = pow_filtered_df[selected_columns].sum(axis=1)
+            
+            # Calculate growth
+            if pow_growth_type == "Year-over-Year (YoY)":
+                periods_map = {"Monthly": 12, "Quarterly": 4, "Semi-annually": 2, "Annually": 1}
+                pow_filtered_df['Total_Growth'] = calculate_yoy_growth(pow_filtered_df, 'Total_Volume', periods_map[pow_period])
+                growth_title = "YoY Growth (%)"
+            else:
+                pow_filtered_df['Total_Growth'] = calculate_ytd_growth(pow_filtered_df, 'Total_Volume', 'Date', pow_period)
+                growth_title = "YTD Growth (%)"
+            
+            # Create chart with secondary y-axis
+            pow_fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            # Create x-axis labels based on period
+            if pow_period == "Monthly":
+                x_labels = [d.strftime('%b %Y') for d in pow_filtered_df['Date']]
+            elif pow_period == "Quarterly":
+                x_labels = [f"Q{d.quarter} {d.year}" for d in pow_filtered_df['Date']]
+            elif pow_period == "Semi-annually":
+                x_labels = [f"H{((d.month-1)//6)+1} {d.year}" for d in pow_filtered_df['Date']]
+            else:
+                x_labels = [str(int(d.year)) for d in pow_filtered_df['Date']]
+            
+# ...existing code...
+            # Add stacked bars for each selected plant
+            colors = ['#0C4130', '#08C179', '#D3BB96', '#B78D51', '#C0C1C2', '#97999B']
+            for i, col in enumerate(selected_columns):
+                plant_name = col.replace(volume_suffix, '')
+                pow_fig.add_trace(
+                    go.Bar(
+                        name=plant_name,
+                        x=x_labels,
+                        y=pow_filtered_df[col],
+                        marker_color=colors[i % len(colors)],  # FIX: Use a single color
+                        hovertemplate=f"{plant_name}<br>%{{x}}<br>Volume: %{{y}} mn kWh<extra></extra>"
+                    ),
+                    secondary_y=False
+                )
+            
+            # Add growth line
+            pow_fig.add_trace(
+                go.Scatter(
+                    name=f"Total {growth_title}",
+                    x=x_labels,
+                    y=pow_filtered_df['Total_Growth'],
+                    mode='lines+markers',
+                    line=dict(color='red', width=2),
+                    marker=dict(size=4),
+                    hovertemplate=f"Total {growth_title}<br>%{{x}}<br>Growth: %{{y:.2f}}%<extra></extra>"
+                ),
+                secondary_y=True
+            )
+            
+            # Update layout
+            pow_fig.update_layout(
+                title=f'{pow_period} POW Power Volume ({volume_type}) with {growth_title}',
+                barmode='stack',
+                hovermode='x unified',
+                showlegend=True
+            )
+            
+            pow_fig.update_yaxes(title_text="Volume (mn kWh)", secondary_y=False)
+            pow_fig.update_yaxes(title_text=growth_title, secondary_y=True)
+            pow_fig.update_xaxes(title_text="Date")
+            
+            # Remove secondary y-axis gridlines
+            pow_fig = update_chart_layout_with_no_secondary_grid(pow_fig)
+            
+            st.plotly_chart(pow_fig, use_container_width=True)
+            
+            # Download data section
+            st.subheader("📥 Download Data")
+            pow_download_df = pow_filtered_df[['Date'] + selected_columns + ['Total_Volume', 'Total_Growth']].copy()
+            pow_download_df['Period_Label'] = x_labels
+            add_download_buttons(pow_download_df, f"pow_power_volume_{volume_type.lower()}_{pow_period.lower()}_{pow_growth_type.lower().replace(' ', '_').replace('(', '').replace(')', '')}")
+        
+        else:  # Revenue & ASP
+            with pow_col3:
+                selected_plant_revenue = st.selectbox(
+                    "Select Power Plant:",
+                    power_plants + ["POW Total"],
+                    key="pow_plant_revenue"
+                )
+            
+            st.subheader(f"Revenue & ASP - {selected_plant_revenue}")
+            
+            # Filter and aggregate data based on period
+            if selected_plant_revenue == "POW Total":
+                # Calculate total revenue across all plants
+                revenue_columns = [plant + " Revenue (VNDbn)" for plant in power_plants]
+                asp_columns = [plant + " ASP (VND/kWh)" for plant in power_plants]
+                volume_columns = [plant + " Mobilized (mn kWh)" for plant in power_plants]
+                
+                if pow_period == "Monthly":
+                    pow_revenue_df = pow_df[['Date'] + revenue_columns + volume_columns].copy()
+                    pow_revenue_df['Total_Revenue'] = pow_revenue_df[revenue_columns].sum(axis=1)
+                    pow_revenue_df['Total_Volume'] = pow_revenue_df[volume_columns].sum(axis=1)
+                    pow_revenue_df['Average_ASP'] = (pow_revenue_df['Total_Revenue'] * 1000) / pow_revenue_df['Total_Volume']  # Convert billion to million for calculation
+                elif pow_period == "Quarterly":
+                    pow_revenue_df = pow_df.groupby(['Year', 'Quarter'])[revenue_columns + volume_columns].sum().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{y}-{q*3:02d}-01" for y, q in zip(pow_revenue_df['Year'], pow_revenue_df['Quarter'])])
+                    pow_revenue_df['Total_Revenue'] = pow_revenue_df[revenue_columns].sum(axis=1)
+                    pow_revenue_df['Total_Volume'] = pow_revenue_df[volume_columns].sum(axis=1)
+                    pow_revenue_df['Average_ASP'] = (pow_revenue_df['Total_Revenue'] * 1000) / pow_revenue_df['Total_Volume']
+                elif pow_period == "Semi-annually":
+                    pow_revenue_df = pow_df.groupby(['Year', 'Half'])[revenue_columns + volume_columns].sum().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{y}-{h*6:02d}-01" for y, h in zip(pow_revenue_df['Year'], pow_revenue_df['Half'])])
+                    pow_revenue_df['Total_Revenue'] = pow_revenue_df[revenue_columns].sum(axis=1)
+                    pow_revenue_df['Total_Volume'] = pow_revenue_df[volume_columns].sum(axis=1)
+                    pow_revenue_df['Average_ASP'] = (pow_revenue_df['Total_Revenue'] * 1000) / pow_revenue_df['Total_Volume']
+                else:  # Annually
+                    pow_revenue_df = pow_df.groupby('Year')[revenue_columns + volume_columns].sum().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{int(y)}-01-01" for y in pow_revenue_df['Year']])
+                    pow_revenue_df['Total_Revenue'] = pow_revenue_df[revenue_columns].sum(axis=1)
+                    pow_revenue_df['Total_Volume'] = pow_revenue_df[volume_columns].sum(axis=1)
+                    pow_revenue_df['Average_ASP'] = (pow_revenue_df['Total_Revenue'] * 1000) / pow_revenue_df['Total_Volume']
+                
+                revenue_col = 'Total_Revenue'
+                asp_col = 'Average_ASP'
+            else:
+                # Individual plant data
+                revenue_col = selected_plant_revenue + " Revenue (VNDbn)"
+                asp_col = selected_plant_revenue + " ASP (VND/kWh)"
+                
+                if pow_period == "Monthly":
+                    pow_revenue_df = pow_df[['Date', revenue_col, asp_col]].copy()
+                elif pow_period == "Quarterly":
+                    pow_revenue_df = pow_df.groupby(['Year', 'Quarter'])[[revenue_col, asp_col]].mean().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{y}-{q*3:02d}-01" for y, q in zip(pow_revenue_df['Year'], pow_revenue_df['Quarter'])])
+                elif pow_period == "Semi-annually":
+                    pow_revenue_df = pow_df.groupby(['Year', 'Half'])[[revenue_col, asp_col]].mean().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{y}-{h*6:02d}-01" for y, h in zip(pow_revenue_df['Year'], pow_revenue_df['Half'])])
+                else:  # Annually
+                    pow_revenue_df = pow_df.groupby('Year')[[revenue_col, asp_col]].mean().reset_index()
+                    pow_revenue_df['Date'] = pd.to_datetime([f"{int(y)}-01-01" for y in pow_revenue_df['Year']])
+            
+            # Create chart with secondary y-axis
+            pow_revenue_fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            # Create x-axis labels based on period
+            if pow_period == "Monthly":
+                x_labels = [d.strftime('%b %Y') for d in pow_revenue_df['Date']]
+            elif pow_period == "Quarterly":
+                x_labels = [f"Q{d.quarter} {d.year}" for d in pow_revenue_df['Date']]
+            elif pow_period == "Semi-annually":
+                x_labels = [f"H{((d.month-1)//6)+1} {d.year}" for d in pow_revenue_df['Date']]
+            else:
+                x_labels = [str(int(d.year)) for d in pow_revenue_df['Date']]
+            
+            # Add revenue bars
+            pow_revenue_fig.add_trace(
+                go.Bar(
+                    name="Revenue",
+                    x=x_labels,
+                    y=pow_revenue_df[revenue_col],
+                    marker_color='#08C179',
+                    hovertemplate=f"Revenue<br>%{{x}}<br>Revenue: %{{y}} VND bn<extra></extra>"
+                ),
+                secondary_y=False
+            )
+            
+            # Add ASP line
+            pow_revenue_fig.add_trace(
+                go.Scatter(
+                    name="ASP",
+                    x=x_labels,
+                    y=pow_revenue_df[asp_col],
+                    mode='lines+markers',
+                    line=dict(color='red', width=2),
+                    marker=dict(size=4),
+                    hovertemplate=f"ASP<br>%{{x}}<br>ASP: %{{y:.2f}} VND/kWh<extra></extra>"
+                ),
+                secondary_y=True
+            )
+            
+            # Update layout
+            pow_revenue_fig.update_layout(
+                title=f'{pow_period} {selected_plant_revenue} Revenue & ASP',
+                hovermode='x unified',
+                showlegend=True
+            )
+            
+            pow_revenue_fig.update_yaxes(title_text="Revenue (VND bn)", secondary_y=False)
+            pow_revenue_fig.update_yaxes(title_text="ASP (VND/kWh)", secondary_y=True)
+            pow_revenue_fig.update_xaxes(title_text="Date")
+            
+            # Remove secondary y-axis gridlines
+            pow_revenue_fig = update_chart_layout_with_no_secondary_grid(pow_revenue_fig)
+            
+            st.plotly_chart(pow_revenue_fig, use_container_width=True)
+            
+            # Download data section
+            st.subheader("📥 Download Data")
+            pow_revenue_download_df = pow_revenue_df[['Date', revenue_col, asp_col]].copy()
+            pow_revenue_download_df['Period_Label'] = x_labels
+            add_download_buttons(pow_revenue_download_df, f"pow_revenue_asp_{selected_plant_revenue.lower().replace(' ', '_')}_{pow_period.lower()}")
+
+        # Stock Performance Chart for POW
+        st.subheader("📈 POW & NT2 Stock Performance (YTD)")
+        pow_stocks = ['POW','NT2']
+        pow_stock_fig = create_stock_performance_chart(pow_stocks, "POW")
+        st.plotly_chart(pow_stock_fig, use_container_width=True)
 
