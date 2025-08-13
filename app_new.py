@@ -19,7 +19,7 @@ st.title("Power Sector Dashboard")
 def convert_df_to_excel(df, sheet_name="Data"):
     """Convert dataframe to Excel bytes for download"""
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, sheet_name=sheet_name, index=False)
     return output.getvalue()
 
