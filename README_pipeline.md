@@ -5,7 +5,7 @@
 This pipeline automatically downloads, processes, and updates financial data for Vietnamese power companies (REE, PC1, HDG, GEG, POW) by:
 
 1. **Downloading PDFs** from company investor relations websites
-2. **Extracting financial data** using OpenAI's structured outputs
+2. **Extracting financial data** using manual processing methods
 3. **Converting quarterly data** from Vietnamese formats to standardized quarters
 4. **Updating CSV files** with the extracted financial information
 
@@ -21,7 +21,7 @@ This pipeline automatically downloads, processes, and updates financial data for
 ### 📊 Data Processing
 - **Vietnamese Quarter Recognition**: Automatically converts "Quý I", "6 tháng", "9 tháng", "cả năm" to 1Q, 2Q, 3Q, 4Q
 - **Cumulative Data Adjustment**: Converts cumulative figures to quarterly figures
-- **Structured Data Extraction**: Uses OpenAI to extract financial metrics from Vietnamese PDFs
+- **Structured Data Extraction**: Uses pattern matching to extract financial metrics from Vietnamese PDFs
 - **CSV Integration**: Updates existing company_*_monthly.csv files
 
 ### 🔍 Extracted Metrics
@@ -42,18 +42,8 @@ This pipeline automatically downloads, processes, and updates financial data for
 pip install -r requirements_pipeline.txt
 ```
 
-### 2. Set Up OpenAI API Key
-Create a `.env` file or set environment variable:
-```bash
-# Option 1: .env file
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Option 2: Environment variable (Windows)
-set OPENAI_API_KEY=your_openai_api_key_here
-
-# Option 3: Environment variable (Linux/Mac)
-export OPENAI_API_KEY=your_openai_api_key_here
-```
+### 2. Configuration
+No additional configuration required. The pipeline uses built-in pattern matching for data extraction.
 
 ## Usage
 
@@ -81,7 +71,7 @@ downloads = downloader.download_all_companies()
 ```python
 from pdf_processor import CompanyPDFProcessor
 
-processor = CompanyPDFProcessor(api_key="your_key")
+processor = CompanyPDFProcessor()
 financial_data = processor.process_pdf("path/to/pdf", "REE")
 ```
 
@@ -98,7 +88,7 @@ results = updater.update_all_companies(financial_data_list)
 ```
 dashboard/
 ├── company_pdf_downloader.py    # PDF scraping and downloading
-├── pdf_processor.py             # LangChain PDF processing + OpenAI extraction
+├── pdf_processor.py             # LangChain PDF processing + pattern-based extraction
 ├── csv_updater.py              # CSV file updates
 ├── financial_data_pipeline.py   # Main orchestrator
 ├── test_pipeline.py            # Test suite
@@ -163,7 +153,7 @@ dashboard/
 The pipeline includes comprehensive error handling:
 - **Network timeouts** for PDF downloads
 - **PDF parsing errors** with fallback mechanisms
-- **OpenAI API failures** with retry logic
+- **Pattern matching failures** with fallback mechanisms
 - **CSV update errors** with validation
 - **Detailed logging** for debugging
 
@@ -224,10 +214,10 @@ This pipeline integrates seamlessly with your existing Streamlit dashboard:
 
 ### Common Issues
 
-1. **OpenAI API Key Missing**
+1. **Pattern Matching Issues**
    ```
-   Error: OpenAI API key is required
-   Solution: Set OPENAI_API_KEY environment variable
+   Error: Cannot extract data from PDF
+   Solution: Check PDF format and text quality
    ```
 
 2. **PDF Download Failures**
