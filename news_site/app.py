@@ -12,6 +12,7 @@ then open http://127.0.0.1:8000
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -123,6 +124,7 @@ def canonical_tags(raw_list) -> list[str]:
 # tagged "REE", a Ford Ranger tagged "OIL") drop out. Terms are multi-word or
 # unambiguous to avoid matching "điện thoại"/"dầu máy".
 SECTOR_KEYWORDS = [
+    # Năng lượng / dầu khí (multi-word to avoid matching "điện thoại"/"dầu máy")
     "xăng", "dầu khí", "dầu thô", "xăng dầu", "xăng sinh học", "lọc dầu",
     "khí đốt", "khí lng", "năng lượng", "than đá",
     "thủy điện", "nhiệt điện", "điện gió", "điện mặt trời", "điện khí",
@@ -130,8 +132,24 @@ SECTOR_KEYWORDS = [
     "tiền điện", "cắt điện", "sản lượng điện", "thiếu điện", "tiêu thụ điện",
     "điện lực", "nhà máy điện", "dự án điện", "công suất điện",
     "evn", "pvn", "petrolimex", "e10",
+    # Sự kiện doanh nghiệp / tài chính (nới rộng để tin doanh nghiệp không bị miss)
+    "cổ tức", "cổ phiếu", "trái phiếu", "niêm yết", "chào bán", "cổ đông",
+    "đhđcđ", "đại hội đồng cổ đông", "doanh thu", "lợi nhuận", "lãi ròng",
+    "kết quả kinh doanh", "báo cáo tài chính", "vốn điều lệ", "thoái vốn",
+    # Dự án / hợp đồng / pháp lý
+    "dự án", "hợp đồng", "epc", "nhà thầu", "khởi công", "đầu tư", "đấu thầu",
+    "nhà máy", "khởi tố", "thanh tra", "chủ trương đầu tư",
 ]
 SECTOR_RE = "|".join(SECTOR_KEYWORDS)
+
+# Advertorial / PR sources that merely name-drop a company (e.g. a vendor bragging
+# it upgraded a plant's meeting-room audio) — not real news. They score like real
+# company news (company mention + a sector word) so nothing else filters them; the
+# only reliable signal is the publisher. Add new ones here as they surface.
+BLOCK_SOURCES = [
+    "Trường Thịnh Company",
+]
+BLOCK_SOURCE_RE = "|".join(re.escape(s) for s in BLOCK_SOURCES)
 
 
 def serialize(doc: dict) -> dict:
@@ -201,7 +219,7 @@ def api_news(
             {"title": {"$regex": SECTOR_RE, "$options": "i"}},
             {"snippet": {"$regex": SECTOR_RE, "$options": "i"}},
         ]}
-        relevant_news = {"$and": [
+        relevant_and = [
             {"type": "news"},
             {"is_noise": {"$ne": True}},
             {"$or": [
@@ -209,7 +227,11 @@ def api_news(
                 {"matched_topics.0": {"$exists": True}},
                 sector_match,                        # or is genuine sector/policy news
             ]},
-        ]}
+        ]
+        if BLOCK_SOURCE_RE:
+            # Exclude advertorial/PR publishers (a null/absent source still passes).
+            relevant_and.append({"source": {"$not": {"$regex": BLOCK_SOURCE_RE, "$options": "i"}}})
+        relevant_news = {"$and": relevant_and}
         query.setdefault("$and", []).append({"$or": [keep_non_news, relevant_news]})
     # relevance == "all" -> no gate (full high-recall set)
     if tag:
@@ -240,7 +262,9 @@ def api_news(
 
     cursor = (
         col.find(query)
-        .sort([("date", -1), ("importance_score", -1)])
+        # date keeps the day grouping; first_seen floats freshly-scraped news to the
+        # top within a day (missing on older docs -> they sort below); score breaks ties.
+        .sort([("date", -1), ("first_seen", -1), ("importance_score", -1)])
         .skip(skip)
         .limit(limit)
     )
