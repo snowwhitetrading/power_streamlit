@@ -1,0 +1,16 @@
+# Render Blueprint — deploys the news website as an always-on web service.
+# In Render: New + → Blueprint → chọn repo này. Nó đọc file này để tạo service.
+# Sau khi tạo, vào service → Environment → dán MONGO_URI (Render KHÔNG lấy từ
+# .secrets.toml vì file đó không được đẩy lên git).
+services:
+  - type: web
+    name: tin-nganh-dien
+    runtime: python
+    plan: free
+    buildCommand: pip install -r news_site/requirements.txt
+    startCommand: uvicorn news_site.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGO_URI
+        sync: false          # tự nhập trong dashboard, không commit vào git
+      - key: PYTHONUNBUFFERED
+        value: "1"

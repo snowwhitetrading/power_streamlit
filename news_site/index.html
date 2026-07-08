@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --panel:#ffffff; --border:#e6e6ea; --text:#1a1a1f; --muted:#6b6b76;
+    --accent:#2563eb; --chip:#f0f1f4; --chip-text:#41414c; --important:#e0492f;
+    --shadow:0 1px 2px rgba(0,0,0,.04),0 1px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e0e11; --panel:#17171b; --border:#26262c; --text:#ececed; --muted:#9a9aa4;
+      --accent:#5b8cff; --chip:#22222a; --chip-text:#c3c3cc; --important:#ff6a4d;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;
+    font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  /* form controls don't inherit fonts by default — force them to match the page */
+  input,select,button,textarea{font-family:inherit;font-size:14px;line-height:1.4;color:inherit}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1600px;margin:0 auto;padding:0 22px 80px}
+
+  header.top{padding:30px 0 14px}
+  header.top h1{margin:0;font-size:23px;font-weight:700;letter-spacing:-.2px}
+  header.top p{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+  /* sticky global filter bar */
+  .bar{position:sticky;top:0;z-index:20;background:var(--bg);
+    padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:18px}
+  .row2{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px}
+  .search input{border:0;outline:0;background:transparent;color:var(--text);width:100%;font-size:14px}
+  .toggle{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);cursor:pointer;
+    white-space:nowrap;user-select:none}
+  .toggle input{accent-color:var(--accent);width:15px;height:15px}
+  .daterow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:13px;color:var(--muted)}
+  .daterow input[type=date]{background:var(--panel);border:1px solid var(--border);border-radius:9px;
+    padding:6px 9px;color:var(--text);font-size:13px;color-scheme:light dark}
+  .preset{padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--panel);
+    color:var(--muted);font-size:12px;cursor:pointer;white-space:nowrap}
+  .preset.active{border-color:var(--accent);color:var(--accent)}
+  select.tagsel{background:var(--panel);border:1px solid var(--border);border-radius:10px;
+    padding:8px 12px;color:var(--text);font-size:14px;min-width:170px;cursor:pointer;color-scheme:light dark}
+
+  /* four side-by-side columns; collapses on narrower screens */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;align-items:start}
+  @media (max-width:1200px){ .grid{grid-template-columns:1fr 1fr} }
+  @media (max-width:680px){ .grid{grid-template-columns:1fr} }
+
+  .sec{min-width:0}
+  .sechead{display:flex;align-items:baseline;gap:9px;margin-bottom:12px;padding-bottom:9px;
+    border-bottom:2px solid var(--border)}
+  .sechead h2{margin:0;font-size:14px;font-weight:600}
+  .sechead .desc{color:var(--muted);font-size:12px;flex:1}
+  .sechead .count{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:13px;
+    padding:13px 15px;margin-bottom:11px;box-shadow:var(--shadow);transition:border-color .15s}
+  .card:hover{border-color:var(--accent)}
+  .card .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:12px}
+  .badge{font-size:11px;font-weight:600;padding:1px 7px;border-radius:6px;background:var(--chip);color:var(--chip-text)}
+  .badge.imp{background:rgba(224,73,47,.14);color:var(--important)}
+  .src{color:var(--muted)}
+  .date{color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .card h3{margin:0;font-size:14px;font-weight:600;line-height:1.4}
+  .card h3 a:hover{color:var(--accent)}
+  .card .snip{margin:6px 0 0;color:var(--muted);font-size:12.5px;line-height:1.5}
+  .card .tags{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .card .tags span{font-size:11px;color:var(--chip-text);background:var(--chip);padding:1px 7px;border-radius:6px}
+
+  .more{display:block;width:100%;margin:2px 0 4px;padding:9px;border-radius:9px;
+    border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:13px;cursor:pointer}
+  .more:disabled{opacity:.45;cursor:default}
+  .secempty{color:var(--muted);font-size:13px;padding:14px 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Dashboard</h1>
+    <p>Cập nhật tin ngành, tin doanh nghiệp, công bố &amp; thông cáo</p>
+  </header>
+
+  <div class="bar">
+    <div class="row2">
+      <label class="search">
+        <span>🔎</span>
+        <input id="q" type="search" placeholder="Tìm tiêu đề, nội dung…" autocomplete="off">
+      </label>
+      <div id="relbtns" style="display:flex;gap:6px">
+        <span class="preset active" data-rel="relevant">Quan trọng</span>
+        <span class="preset" data-rel="all">Tất cả</span>
+      </div>
+    </div>
+    <div class="daterow">
+      <span class="preset active" data-days="0">Tất cả</span>
+      <span class="preset" data-days="7">7 ngày</span>
+      <span class="preset" data-days="30">30 ngày</span>
+      <span class="preset" data-days="90">90 ngày</span>
+      <span style="margin-left:6px">Từ</span>
+      <input type="date" id="dfrom">
+      <span>đến</span>
+      <input type="date" id="dto">
+      <select class="tagsel" id="tagselect" style="margin-left:6px"><option value="">Tất cả mã / từ khoá</option></select>
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const PAGE = 12;
+const SECTIONS = [
+  {type:"industry", label:"Tin ngành",        desc:"không gắn mã cổ phiếu"},
+  {type:"company",  label:"Tin doanh nghiệp", desc:"gắn mã cổ phiếu"},
+  {type:"document", label:"Công bố",          desc:"công bố thông tin (IR)"},
+  {type:"press",    label:"Thông cáo",        desc:"thông cáo báo chí"},
+];
+// shared filters across all four sections
+const filters = { q:"", tag:"", relevance:"relevant", date_from:"", date_to:"" };
+let debounce;
+
+const MONTHS = ["","Th1","Th2","Th3","Th4","Th5","Th6","Th7","Th8","Th9","Th10","Th11","Th12"];
+function fmtDate(iso){
+  if(!iso) return "";
+  const [y,m,d] = iso.split("-").map(Number);
+  return y ? `${d} ${MONTHS[m]} ${y}` : iso;
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function cardHTML(it){
+  const src = it.source ? `<span class="src">${esc(it.source)}</span>` : "";
+  const tags = (it.tags||[]).map(x=>`<span>${esc(x)}</span>`).join("");
+  const snip = it.snippet ? `<p class="snip">${esc(it.snippet)}</p>` : "";
+  const titleInner = esc(it.title||"(không có tiêu đề)");
+  const title = it.url
+    ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${titleInner} ↗</a>` : titleInner;
+  return `<article class="card">
+    <div class="meta">${src}<span class="date">${fmtDate(it.date)}</span></div>
+    <h3>${title}</h3>
+    ${snip}
+    ${tags?`<div class="tags">${tags}</div>`:""}
+  </article>`;
+}
+
+// build the four section shells once
+const grid = document.getElementById("grid");
+const S = {};  // per-section runtime state + DOM refs
+for(const s of SECTIONS){
+  const el = document.createElement("section");
+  el.className = "sec";
+  el.innerHTML = `
+    <div class="sechead"><h2>${s.label}</h2><span class="desc">${s.desc}</span><span class="count"></span></div>
+    <div class="feed"></div>
+    <div class="secempty" style="display:none">Không có tin nào khớp bộ lọc.</div>
+    <button class="more" style="display:none">Xem thêm</button>`;
+  grid.appendChild(el);
+  const more = el.querySelector(".more");
+  const ref = {
+    type:s.type, skip:0, total:0,
+    feed:el.querySelector(".feed"),
+    count:el.querySelector(".count"),
+    empty:el.querySelector(".secempty"),
+    more,
+  };
+  more.addEventListener("click", ()=>loadSection(ref, false));
+  S[s.type] = ref;
+}
+
+async function loadSection(ref, reset){
+  if(reset){ ref.skip = 0; ref.feed.innerHTML = ""; }
+  ref.more.disabled = true;
+  const p = new URLSearchParams({
+    type:ref.type, q:filters.q, tag:filters.tag,
+    date_from:filters.date_from, date_to:filters.date_to,
+    relevance:filters.relevance, skip:ref.skip, limit:PAGE
+  });
+  const {items, total} = await (await fetch("/api/news?"+p)).json();
+  ref.total = total;
+  ref.feed.insertAdjacentHTML("beforeend", items.map(cardHTML).join(""));
+  ref.skip += items.length;
+  ref.count.textContent = total ? `${Math.min(ref.skip,total)}/${total}` : "0";
+  ref.empty.style.display = total===0 ? "block" : "none";
+  const hasMore = ref.skip < total;
+  ref.more.style.display = hasMore ? "block" : "none";
+  ref.more.disabled = false;
+  ref.more.textContent = "Xem thêm";
+}
+
+function reloadAll(){ for(const t in S) loadSection(S[t], true); }
+
+// ---- shared filter controls ----
+document.getElementById("q").addEventListener("input", e=>{
+  clearTimeout(debounce);
+  debounce = setTimeout(()=>{ filters.q = e.target.value.trim(); reloadAll(); }, 300);
+});
+document.getElementById("relbtns").addEventListener("click", e=>{
+  const b = e.target.closest(".preset"); if(!b) return;
+  document.querySelectorAll("#relbtns .preset").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active");
+  filters.relevance = b.dataset.rel; reloadAll();
+});
+
+// ---- date range ----
+const dFrom = document.getElementById("dfrom");
+const dTo = document.getElementById("dto");
+const isoDay = d => d.toISOString().slice(0,10);   // YYYY-MM-DD
+
+function applyDates(from, to, {silent=false}={}){
+  filters.date_from = from; filters.date_to = to;
+  if(!silent){ dFrom.value = from; dTo.value = to; }
+  reloadAll();
+}
+// manual date pickers clear any active preset
+[dFrom, dTo].forEach(inp => inp.addEventListener("change", ()=>{
+  document.querySelectorAll(".preset").forEach(p=>p.classList.remove("active"));
+  applyDates(dFrom.value, dTo.value, {silent:true});
+}));
+// quick presets: last N days (0 = all time)
+document.querySelectorAll(".preset").forEach(p => p.addEventListener("click", ()=>{
+  document.querySelectorAll(".preset").forEach(x=>x.classList.remove("active"));
+  p.classList.add("active");
+  const days = +p.dataset.days;
+  if(days === 0){ applyDates("", ""); return; }
+  const to = new Date();
+  const from = new Date(); from.setDate(from.getDate() - days + 1);
+  applyDates(isoDay(from), isoDay(to));
+}));
+
+async function loadTags(){
+  const sel = document.getElementById("tagselect");
+  const opts = t => `<option value="${esc(t.tag)}">${esc(t.tag)} (${t.count})</option>`;
+  try{
+    const {tickers, keywords} = await (await fetch("/api/tags")).json();
+    let html = "";
+    if(tickers.length) html += `<optgroup label="Mã cổ phiếu">${tickers.map(opts).join("")}</optgroup>`;
+    if(keywords.length) html += `<optgroup label="Từ khoá">${keywords.map(opts).join("")}</optgroup>`;
+    sel.insertAdjacentHTML("beforeend", html);
+  }catch(_){}
+  sel.addEventListener("change", ()=>{ filters.tag = sel.value; reloadAll(); });
+}
+
+loadTags();
+reloadAll();
+</script>
+</body>
+</html>
