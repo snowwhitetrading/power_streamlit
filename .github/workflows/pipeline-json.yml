@@ -1,0 +1,44 @@
+# Nhóm JSON: processor_documents -> processor_news -> processor_press -> upload_json. Thay cho 4 task "JSON 09h/12h/15h/18h" trong Task Scheduler.
+name: Pipeline JSON
+
+on:
+  schedule:
+    # 02,05,08,11 UTC = 09,12,15,18 giờ VN. GitHub chạy cron theo UTC và có thể trễ 5-15 phút.
+    - cron: '0 2,5,8,11 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-json
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # data/ bị gitignore nhưng processor_* đọc file cũ để chạy incremental.
+      # Cache giữ lại giữa các lần chạy; key có run_id để lần nào cũng lưu bản mới,
+      # restore-keys lấy bản gần nhất.
+      - name: Restore data/
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: pipeline-data-${{ github.run_id }}
+          restore-keys: pipeline-data-
+
+      - name: Run pipeline
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          PYTHONUTF8: '1'
+        # Không dùng --log: để output chảy thẳng ra log của Actions cho dễ đọc.
+        run: python pipeline_run.py --group json --continue-on-error

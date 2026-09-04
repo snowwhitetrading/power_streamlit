@@ -147,9 +147,26 @@ SECTOR_RE = "|".join(SECTOR_KEYWORDS)
 # company news (company mention + a sector word) so nothing else filters them; the
 # only reliable signal is the publisher. Add new ones here as they surface.
 BLOCK_SOURCES = [
+    # Advertorial / vendor PR (name-drops a company, not real news)
     "Trường Thịnh Company",
+    # Social-media platforms — never a financial-news publisher; a keyword match
+    # here (a TikTok account named "…Giá Xăng Dầu", a YouTube local-TV roundup) is
+    # noise regardless of score/topic.
+    "Facebook", "YouTube", "TikTok", "Instagram", "Threads", "Zalo",
+    # Job listings, AI aggregators, entertainment, foreign-language false matches.
+    "vieclam.tuoitre.vn", "AI Hay", "Yeah1 News", "Latvijas Valsts",
 ]
+# Matched case-insensitively as a substring of the source name.
 BLOCK_SOURCE_RE = "|".join(re.escape(s) for s in BLOCK_SOURCES)
+
+# Off-topic content that sneaks in via substring keyword matches — e.g. a film
+# project "dự án điện ẢNH" matches the "dự án điện" keyword. When the title/snippet
+# reads as entertainment, drop it from the default view (still shown under "Tất cả").
+NEG_KEYWORDS = [
+    "điện ảnh", "phim", "đạo diễn", "diễn viên", "ca sĩ", "showbiz",
+    "hoa hậu", "người mẫu", "Hollywood", "teaser", "phòng vé", "bom tấn",
+]
+NEG_RE = "|".join(re.escape(k) for k in NEG_KEYWORDS)
 
 
 def serialize(doc: dict) -> dict:
@@ -231,6 +248,13 @@ def api_news(
         if BLOCK_SOURCE_RE:
             # Exclude advertorial/PR publishers (a null/absent source still passes).
             relevant_and.append({"source": {"$not": {"$regex": BLOCK_SOURCE_RE, "$options": "i"}}})
+        if NEG_RE:
+            # Exclude entertainment/off-topic content that matched a keyword by
+            # substring (e.g. a film "dự án điện ảnh" matching "dự án điện").
+            relevant_and.append({"$nor": [
+                {"title": {"$regex": NEG_RE, "$options": "i"}},
+                {"snippet": {"$regex": NEG_RE, "$options": "i"}},
+            ]})
         relevant_news = {"$and": relevant_and}
         query.setdefault("$and", []).append({"$or": [keep_non_news, relevant_news]})
     # relevance == "all" -> no gate (full high-recall set)

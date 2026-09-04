@@ -1,0 +1,12 @@
+# Deps cho pipeline (processor_*.py, upload_*.py, pipeline_run.py).
+# Pin theo đúng version trong .venv local (Python 3.13.5) để runner chạy giống máy.
+# Website news_site/ có requirements riêng.
+aiohttp==3.13.3
+beautifulsoup4==4.14.3
+certifi==2026.2.25
+dnspython==2.8.0
+numpy==2.4.3
+pandas==2.3.3
+pymongo==4.17.0
+requests==2.32.5
+urllib3==2.6.3

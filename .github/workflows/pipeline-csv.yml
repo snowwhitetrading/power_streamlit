@@ -1,0 +1,43 @@
+# Nhóm CSV: processor_data -> upload_csv. Thay cho task "CSV 09h" trong Task Scheduler.
+name: Pipeline CSV
+
+on:
+  schedule:
+    # 02:00 UTC = 09:00 giờ VN. GitHub chạy cron theo UTC và có thể trễ 5-15 phút.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline-csv
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # data/ bị gitignore nhưng processor_* đọc file cũ để chạy incremental.
+      # Cache giữ lại giữa các lần chạy; key có run_id để lần nào cũng lưu bản mới,
+      # restore-keys lấy bản gần nhất.
+      - name: Restore data/
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: pipeline-data-${{ github.run_id }}
+          restore-keys: pipeline-data-
+
+      - name: Run pipeline
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          PYTHONUTF8: '1'
+        # Không dùng --log: để output chảy thẳng ra log của Actions cho dễ đọc.
+        run: python pipeline_run.py --group csv --continue-on-error

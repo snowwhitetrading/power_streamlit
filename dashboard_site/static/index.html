@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thị trường điện — Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Thị trường điện</h1>
+    <span class="sub">Dữ liệu từ MongoDB · <code>dc_commodity.ThiTruongDien</code> &amp; <code>TinNganhDien</code></span>
+    <span class="stamp" id="stamp"></span>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="gov"     class="active">1 · Chính phủ</button>
+    <button data-tab="weather">2 · Thời tiết</button>
+    <button data-tab="cost">3 · Chi phí</button>
+    <button data-tab="price">4 · Giá</button>
+    <button data-tab="volume">5 · Sản lượng</button>
+    <button data-tab="company">6 · Doanh nghiệp</button>
+    <button data-tab="news">7 · Tin tức</button>
+  </nav>
+
+  <!-- ================= Tab 1 — Chính phủ ================= -->
+  <section class="tabpage active" id="tab-gov">
+    <div class="cards">
+      <div class="card">
+        <div class="head"><h3>Công suất theo QHĐ8 điều chỉnh</h3>
+          <span class="src">fact_pdp8_capacity</span></div>
+        <div class="chartbox tall"><canvas id="c-pdp8-capacity"></canvas></div>
+        <p class="note">Cột chồng theo loại nguồn cho từng kịch bản (MW). Dòng <em>Total</em> tách riêng ở chú thích.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Vốn đầu tư theo QHĐ8</h3>
+          <span class="src">fact_pdp8_capex</span></div>
+        <div class="chartbox tall"><canvas id="c-pdp8-capex"></canvas></div>
+        <p class="note">Giai đoạn 2026-2030 &amp; 2031-2035 chồng Nhà nước / Xã hội hoá; 2021-2025 chỉ có tổng vốn (USD tỷ).</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Khung giá phát điện</h3>
+          <span class="src">fact_price_framework</span>
+          <span class="ctrl"><select id="pf-region"></select></span></div>
+        <div class="chartbox tall"><canvas id="c-price-framework"></canvas></div>
+        <div class="tablebox" id="t-price-framework"></div>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Danh mục dự án QHĐ8</h3>
+          <span class="src">fact_pdp8_plant</span>
+          <span class="ctrl">
+            <select id="plant-group">
+              <option value="type">Gộp theo loại nguồn</option>
+              <option value="year">Gộp theo năm vận hành</option>
+            </select>
+            <select id="plant-filter"></select>
+          </span></div>
+        <div class="chartbox"><canvas id="c-pdp8-plants"></canvas></div>
+        <div class="tablebox" id="t-pdp8-plants"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Tab 2 — Thời tiết ================= -->
+  <section class="tabpage" id="tab-weather">
+    <div class="cards">
+      <div class="card">
+        <div class="head"><h3>Xác suất ENSO</h3>
+          <span class="src">fetch_enso_probability_monthly</span></div>
+        <div class="chartbox"><canvas id="c-enso-prob"></canvas></div>
+        <p class="note">Cột chồng theo tháng công bố dự báo (%). Cột <code>season</code> chưa được tách khi upload nên không lọc theo kỳ dự báo được.</p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Trạng thái ENSO (ONI)</h3>
+          <span class="src">fetch_hydrology_current_monthly</span>
+          <span class="ctrl"><select id="enso-years"></select></span></div>
+        <div class="chartbox"><canvas id="c-enso-cond"></canvas></div>
+        <p class="note"><span style="color:#e0492f">■</span> El Niño (&gt;0,5) · <span style="color:#2563eb">■</span> La Niña (&lt;-0,5) · <span style="color:#8b8b96">■</span> Trung tính</p>
+      </div>
+    </div>
+    <div class="head" style="margin:24px 0 0">
+      <h3 class="sectitle" style="flex:1">Nhiệt độ trung bình theo thành phố <span class="src">fetch_weather_temperature_monthly</span></h3>
+      <span class="ctrl" id="temp-freq"></span>
+    </div>
+    <div class="cards three" id="temp-cards"></div>
+  </section>
+
+  <!-- ================= Tab 3 — Chi phí ================= -->
+  <section class="tabpage" id="tab-cost">
+    <div class="cards">
+      <div class="card">
+        <div class="head"><h3>Giá than đầu vào</h3><span class="src">manual_coal_cost_monthly</span></div>
+        <div class="chartbox"><canvas id="c-coal"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Giá khí đầu vào</h3><span class="src">manual_gas_cost_monthly</span></div>
+        <div class="chartbox"><canvas id="c-gas"></canvas></div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="head"><h3>Tăng trưởng mực nước hồ chứa (YoY)</h3>
+          <span class="src">fetch_hydro_reservoir_monthly × fact_water_list</span>
+          <span class="ctrl" id="res-freq"></span></div>
+        <div class="chartbox tall"><canvas id="c-reservoir"></canvas></div>
+        <p class="note">Trung bình mực nước theo kỳ cho từng hồ → tăng trưởng so với cùng kỳ năm trước → bình quân theo vùng.</p>
+        <p class="note warn" id="res-note"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Tab 4 — Giá ================= -->
+  <section class="tabpage" id="tab-price">
+    <div class="head" style="margin-bottom:10px">
+      <h3 class="sectitle" style="flex:1;margin-top:0">Giá thị trường CGM = SMP + CAN
+        <span class="src">fetch_price_smp_monthly + manual_price_can_annually</span></h3>
+      <span class="ctrl" id="cgm-freq"></span>
+    </div>
+    <div class="cards" id="cgm-cards"></div>
+    <div class="cards" style="margin-top:18px">
+      <div class="card">
+        <div class="head"><h3>Giá CAN</h3><span class="src">manual_price_can_annually</span></div>
+        <div class="chartbox"><canvas id="c-can"></canvas></div>
+        <p class="note warn" id="can-note"></p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Giá bán lẻ điện bình quân</h3><span class="src">manual_price_retail_monthly</span></div>
+        <div class="chartbox"><canvas id="c-retail"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Tab 5 — Sản lượng ================= -->
+  <section class="tabpage" id="tab-volume">
+    <div class="row2" style="margin-bottom:14px">
+      <span style="color:var(--muted);font-size:13px">Chu kỳ tổng hợp (áp dụng cho cả tab):</span>
+      <span id="vol-freq"></span>
+    </div>
+    <div class="kpis" id="volume-kpis"></div>
+    <div class="cards">
+      <div class="card">
+        <div class="head"><h3>Sản lượng điện thương phẩm</h3>
+          <span class="src">fetch_volume_source_monthly</span></div>
+        <div class="chartbox"><canvas id="c-vol-total"></canvas></div>
+        <p class="note" id="vol-total-note"></p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Cơ cấu sản lượng theo nguồn</h3>
+          <span class="src">fetch_volume_source_monthly</span></div>
+        <div class="chartbox"><canvas id="c-vol-breakdown"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Công suất khả dụng vs phụ tải đỉnh</h3>
+          <span class="src">fetch_capacity_mobilized_monthly · fetch_volume_source_monthly</span></div>
+        <div class="chartbox"><canvas id="c-mismatch"></canvas></div>
+        <p class="note" id="mismatch-note"></p>
+      </div>
+      <div class="card">
+        <div class="head"><h3>Công suất đặt theo nguồn</h3>
+          <span class="src">fetch_capacity_installed_monthly</span></div>
+        <div class="chartbox"><canvas id="c-installed"></canvas></div>
+        <p class="note" id="installed-note"></p>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <div class="head"><h3>Công suất huy động bình quân theo miền</h3>
+          <span class="src">fetch_volume_region_monthly</span></div>
+        <div class="chartbox tall"><canvas id="c-region"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= Tab 6 — Doanh nghiệp ================= -->
+  <section class="tabpage" id="tab-company">
+    <div class="ticker-bar">
+      <select id="ticker" class="big"></select>
+      <span class="src" id="company-src"></span>
+    </div>
+    <div class="cards" id="company-charts"></div>
+    <h3 class="sectitle" id="water-title" style="display:none">Hồ chứa liên quan — mực nước trung bình luỹ kế từ đầu năm</h3>
+    <p class="note" id="water-note" style="margin:-6px 0 12px"></p>
+    <div class="cards three" id="water-charts"></div>
+    <h3 class="sectitle">Tin &amp; công bố của doanh nghiệp</h3>
+    <div class="row2" style="margin-bottom:12px">
+      <label class="preset" id="company-news-imp">Chỉ tin quan trọng</label>
+    </div>
+    <div id="company-news"></div>
+  </section>
+
+  <!-- ================= Tab 7 — Tin tức ================= -->
+  <section class="tabpage" id="tab-news">
+    <div class="bar">
+      <div class="row2">
+        <label class="search"><span>🔎</span>
+          <input id="q" type="search" placeholder="Tìm tiêu đề, nội dung…" autocomplete="off"></label>
+        <div id="relbtns" style="display:flex;gap:6px">
+          <span class="preset active" data-rel="relevant">Quan trọng</span>
+          <span class="preset" data-rel="all">Tất cả</span>
+        </div>
+      </div>
+      <div class="row2" style="margin-top:9px;font-size:13px;color:var(--muted)">
+        <span class="preset dpreset active" data-days="0">Tất cả</span>
+        <span class="preset dpreset" data-days="7">7 ngày</span>
+        <span class="preset dpreset" data-days="30">30 ngày</span>
+        <span class="preset dpreset" data-days="90">90 ngày</span>
+        <span style="margin-left:6px">Từ</span><input type="date" id="dfrom">
+        <span>đến</span><input type="date" id="dto">
+        <select id="tagselect" style="margin-left:6px"><option value="">Tất cả mã / từ khoá</option></select>
+      </div>
+    </div>
+    <div class="newsgrid" id="newsgrid"></div>
+  </section>
+</div>
+
+<script src="/static/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
